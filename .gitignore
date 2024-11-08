@@ -1,0 +1,47 @@
+# Flutter settings
+.flutter/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+build/
+.macos/
+windows/
+ios/
+linux/
+android/
+
+# Dependency directories
+.dart_tool/
+.gradle/
+.idea/
+.metadata
+.packages
+pubspec.lock
+
+# Obsolete files
+*.iml
+*.log
+*.tmp
+*.swp
+*.lock
+*.DS_Store
+*.pdb
+*.dll
+*.so
+*.dylib
+*.class
+
+# Web related
+web/.dart_tool/
+
+# VS Code settings
+.vscode/
+
+# Flutter ephemeral files
+linux/flutter/ephemeral/
+macos/Flutter/ephemeral/
+windows/flutter/ephemeral/
+
+# IDE project files
+*.iml

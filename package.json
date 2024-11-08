@@ -1,0 +1,15 @@
+{
+  "name": "chernov-mteb-301",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.dart",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "chernov_egor",
+  "license": "ISC"
+}
