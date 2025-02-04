@@ -45,3 +45,6 @@ windows/flutter/ephemeral/
 
 # IDE project files
 *.iml
+
+#keys from DB
+assets/service_account.json

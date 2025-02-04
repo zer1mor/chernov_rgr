@@ -3,9 +3,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 import 'package:order_processing_app/views/CreateOrderScreen.dart';
+import 'package:order_processing_app/Services/google_sheets_service.dart';
+import 'models/order.dart' as order;
 import 'LoginScreen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -17,6 +20,21 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final User? user = FirebaseAuth.instance.currentUser;
+  late GoogleSheetsService googleSheetsService;
+
+  @override
+  void initState() {
+    super.initState();
+    _initGoogleSheets();
+  }
+
+  Future<void> _initGoogleSheets() async {
+    try {
+      googleSheetsService = await GoogleSheetsService.initialize();
+    } catch (e) {
+      print("Ошибка инициализации Google Sheets: $e");
+    }
+  }
 
   Stream<QuerySnapshot> getUserOrders() {
     return FirebaseFirestore.instance
@@ -124,70 +142,56 @@ class _HomeScreenState extends State<HomeScreen> {
             return const Center(child: CupertinoActivityIndicator());
           }
           if (snapshot.data == null || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("Нет текущих заказов"));
+            return const Center(child: Text("Нет доступных заказов"));
           }
           return ListView.builder(
             physics: const BouncingScrollPhysics(),
             itemCount: snapshot.data!.docs.length,
             itemBuilder: (context, index) {
-              try {
-                var orderData = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-                String docId = snapshot.data!.docs[index].id;
+              var orderData = snapshot.data!.docs[index].data();
+              String docId = snapshot.data!.docs[index].id;
 
-                String productName = orderData['productName'] ?? 'Без названия';
-                String status = orderData['status'] ?? 'Заказ в обработке';
-                String clientAddress = orderData['clientAddress'] ?? 'Адрес не указан';
-                String transport = orderData['transport'] ?? 'Транспорт не указан';
-                String cargoSize = orderData['cargoSize'] ?? 'Размер не указан';
-                double buyPrice = (orderData['buyPrice'] as num?)?.toDouble() ?? 0.0;
-                String sellDate = (orderData['sellDate']) ?? 'Дата не указана';
-
-                return Card(
-                  child: FadeInLeftBig(
-                    child: ListTile(
-                      title: Text(productName),
-                      subtitle: Text(
-                        'Статус: $status\nАдрес: $clientAddress\nТранспорт: $transport\nРазмер: $cargoSize\nЦена: ${buyPrice.toStringAsFixed(2)} руб.\nОжидаемая дата доставки: $sellDate',
-                        style: const TextStyle(color: Colors.black54),
-                      ),
-                      leading: CircleAvatar(child: Text('${index + 1}')),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (status != 'Услуга оказана')
-                            IconButton(
-                              icon: const Icon(Icons.assignment_turned_in_outlined),
-                              onPressed: () async {
-                                try {
-                                  await FirebaseFirestore.instance
-                                      .collection('orders')
-                                      .doc(docId)
-                                      .update({'status': 'Услуга оказана'});
-                                } catch (e) {
-                                  debugPrint('Ошибка при обновлении статуса заказа: $e');
-                                }
-                              },
-                            ),
+              return Card(
+                child: FadeInLeftBig(
+                  child: ListTile(
+                    title: Text(orderData['productName']),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Статус: ${orderData['status'] ?? 'В ожидании'} "),
+                        Text("Адрес: ${orderData['clientAddress']}"),
+                        Text("Транспорт: ${orderData['transport']}"),
+                        Text("Размер: ${orderData['cargoSize']}"),
+                        Text("Цена: ${orderData['buyPrice']} руб."),
+                      ],
+                    ),
+                    leading: CircleAvatar(child: Text('${index + 1}')),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (orderData['status'] != 'Услуга оказана')
                           IconButton(
-                            icon: const Icon(Icons.delete_outline),
+                            icon: const Icon(Icons.assignment_turned_in_outlined),
                             onPressed: () async {
-                              try {
-                                await FirebaseFirestore.instance.collection('orders').doc(docId).delete();
-                                Fluttertoast.showToast(msg: "Заказ удален");
-                              } catch (e) {
-                                debugPrint('Ошибка при удалении заказа: $e');
-                              }
+                              await FirebaseFirestore.instance
+                                  .collection('orders')
+                                  .doc(docId)
+                                  .update({'status': 'Услуга оказана'});
                             },
                           ),
-                        ],
-                      ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () async {
+                            await FirebaseFirestore.instance.collection('orders').doc(docId).delete();
+                            await googleSheetsService.deleteOrder(docId);
+                            Fluttertoast.showToast(msg: "Заказ удален");
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                );
-              } catch (e) {
-                debugPrint('Ошибка при обработке заказа: $e');
-                return const Center(child: Text("Ошибка при загрузке заказа"));
-              }
+                ),
+              );
             },
           );
         },

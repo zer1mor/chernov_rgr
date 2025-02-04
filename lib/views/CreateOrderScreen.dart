@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
@@ -6,6 +7,7 @@ import 'package:get/get.dart';
 
 import 'HomeScreen.dart';
 import 'models/order.dart' as order;
+import 'package:order_processing_app/Services/google_sheets_service.dart';
 
 class CreateOrderScreen extends StatefulWidget {
   const CreateOrderScreen({super.key});
@@ -24,6 +26,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final TextEditingController clientContactController = TextEditingController();
 
   final User? user = FirebaseAuth.instance.currentUser;
+  late GoogleSheetsService googleSheetsService;
 
   List<order.Transport> transportList = [];
   List<order.District> districtList = [];
@@ -37,6 +40,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   void initState() {
     super.initState();
     loadData();
+    _initGoogleSheets();
+  }
+
+  Future<void> _initGoogleSheets() async {
+    try {
+      googleSheetsService = await GoogleSheetsService.initialize();
+    } catch (e) {
+      print("Ошибка инициализации Google Sheets: $e");
+      Fluttertoast.showToast(msg: "Ошибка инициализации Google Sheets");
+    }
   }
 
   Future<void> loadData() async {
@@ -166,6 +179,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   Future<void> _createOrder() async {
+    if (productNameController.text.isEmpty || clientAddressController.text.isEmpty) {
+      Fluttertoast.showToast(msg: "Заполните все обязательные поля");
+      return;
+    }
+
     EasyLoading.show();
     try {
       order.Order newOrder = order.Order(
@@ -183,7 +201,30 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         cargoSize: selectedCargoSize ?? cargoSizeList.first,
       );
 
-      await order.OrderService.createOrder(newOrder);
+      final docRef = await FirebaseFirestore.instance.collection('orders').add(newOrder.toMap());
+      final docId = docRef.id;
+
+      final orderData = {
+        'userId': newOrder.userId,
+        'clientName': newOrder.clientName,
+        'productName': newOrder.productName,
+        'clientContact': newOrder.clientContact,
+        'clientAddress': newOrder.clientAddress,
+        'district': newOrder.district.toString(),
+        'transport': newOrder.transport.toString(),
+        'cargoSize': newOrder.cargoSize.toString(),
+        'buyPrice': newOrder.buyPrice,
+        'amountWorkers': newOrder.amountWorkers,
+        'DateTime': newOrder.date,
+        'sellDate': newOrder.sellDate
+      };
+
+      try {
+        await googleSheetsService.addOrder(orderData, docId);
+      } catch (e) {
+        print("Ошибка при добавлении заказа в Google Sheets: $e");
+        Fluttertoast.showToast(msg: "Заказ создан, но не добавлен в Google Sheets");
+      }
 
       Fluttertoast.showToast(msg: "Заказ успешно создан");
       Get.off(const HomeScreen());
